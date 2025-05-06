@@ -42,14 +42,14 @@ use bevy::{ecs::component::ComponentId, prelude::*};
 ///
 /// Entities are scored in depth-first post-order traversal,
 /// ensuring that all children are scored before their parents.
-#[derive(Event, Reflect)]
+#[derive(Event, Component, Reflect)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[reflect(Component, PartialEq, Debug, Default)]
 pub struct RunScoring;
 
 /// This [`Event`] is listened to by scoring systems to calculate the score(s) for a given entity.
 /// DO NOT TRIGGER MANUALLY, trigger [`RunScoring`] instead.
-#[derive(Event, Reflect)]
+#[derive(Component, Event, Reflect)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[reflect(Component, PartialEq, Debug, Default)]
 pub struct OnScore;
@@ -60,13 +60,13 @@ pub struct OnScore;
 
 /// Trigger this [`Event`] to make the target actor entity pick an action based on its score(s),
 /// or all actor entities if no target is specified.
-#[derive(Event, Reflect)]
+#[derive(Component, Event, Reflect)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[reflect(Component, PartialEq, Debug, Default)]
 pub struct RunPicking;
 
-/// Listen to this [`Event`] to handle picking an action for the target actor entity.
-#[derive(Event, Reflect)]
+/// Listen to this [`Event`] to handle picking an action for the target actor ent+ity.
+#[derive(Component, Event, Reflect)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[reflect(Component, PartialEq, Debug, Default)]
 pub struct OnPick;
@@ -75,7 +75,7 @@ pub struct OnPick;
 /// This [`Event`] is triggered by [`Picker`]s to indicate that an action has been picked for the target actor entity.
 ///
 /// [`Picker`]: crate::picking::Picker
-#[derive(Event, Reflect)]
+#[derive(Component, Event, Reflect)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[reflect(Component, PartialEq, Debug)]
 pub struct OnPicked {
@@ -90,7 +90,7 @@ pub struct OnPicked {
 /// Trigger this [`Event`] to request a specific action or the picked action to be initiated for the target actor entity.
 ///
 /// This event SHOULD NOT be triggered without a target entity.
-#[derive(Event, Reflect)]
+#[derive(Component, Event, Reflect)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 #[reflect(Component, PartialEq, Debug, Default)]
 pub struct RequestAction {
@@ -99,7 +99,7 @@ pub struct RequestAction {
 }
 
 /// This [`Event`] is triggered by action lifecycle to indicate that they have been initiated.
-#[derive(Event, Reflect)]
+#[derive(Component, Event, Reflect)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[reflect(Component, PartialEq, Debug)]
 pub struct OnActionInitiated {
@@ -111,7 +111,7 @@ pub struct OnActionInitiated {
 /// that they have completed or been cancelled.
 ///
 /// An action will be cancelled if a different action is [requested][`RequestAction`] before it completes.
-#[derive(Event, Reflect)]
+#[derive(Component, Event, Reflect)]
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 #[reflect(Component, PartialEq, Debug)]
 pub struct OnActionEnded {

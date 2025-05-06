@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::component::{ComponentHooks, StorageType},
+    ecs::component::{ComponentHooks, Mutable, StorageType},
     prelude::*,
 };
 
@@ -103,10 +103,11 @@ impl Highest {
 }
 
 impl Component for Highest {
+    type Mutability = Mutable;
     const STORAGE_TYPE: StorageType = StorageType::Table;
 
     fn register_component_hooks(hooks: &mut ComponentHooks) {
-        hooks.on_add(|mut world, _entity, _component| {
+        hooks.on_add(|mut world, _ctx| {
             #[derive(Resource, Default)]
             struct HighestObserverSpawned;
 

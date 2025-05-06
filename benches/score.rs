@@ -1,9 +1,14 @@
-use bevy::prelude::{BuildChildren, Commands, World};
+use std::process::Child;
+
+use bevy::{
+    ecs::hierarchy::ChildOf,
+    prelude::{Commands, World},
+};
 use bevy_observed_utility::{
     event::RunScoring,
     scoring::{AllOrNothing, FixedScore, Score, ScoringPlugin},
 };
-use criterion::{criterion_group, criterion_main, Bencher, Criterion};
+use criterion::{Bencher, Criterion, criterion_group, criterion_main};
 
 fn score(c: &mut Criterion) {
     c.bench_function("score/deep-3", |b| {
@@ -54,13 +59,13 @@ fn build_deep_tree(mut commands: Commands, depth: usize) {
     for _ in 0..depth - 2 {
         last = commands
             .spawn((AllOrNothing::new(0.5), Score::default()))
-            .set_parent(last)
+            .insert(ChildOf(last))
             .id();
     }
 
     commands
         .spawn((FixedScore::new(0.5), Score::default()))
-        .set_parent(last);
+        .insert(ChildOf(last));
 }
 
 criterion_group!(benches, score);

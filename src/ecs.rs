@@ -1,18 +1,21 @@
 //! [`bevy`] ECS utilities for implementing library functionality.
 
-use std::{collections::VecDeque, iter::FusedIterator, marker::PhantomData};
+use std::{
+    collections::VecDeque,
+    iter::{self, FusedIterator},
+    marker::PhantomData,
+};
 
 use bevy::{
     ecs::{
-        component::ComponentId,
+        component::{ComponentId, Mutable},
         entity::EntityHashMap,
         observer::TriggerTargets,
         query::{QueryData, QueryEntityError, QueryFilter, ReadOnlyQueryData},
         system::{IntoObserverSystem, SystemParam},
-        world::Command,
     },
+    platform::collections::hash_map::Entry,
     prelude::*,
-    utils::Entry,
 };
 
 /// A [`TriggerTargets`] used by the action [`Event`]s to trigger an action [`ComponentId`] for a given entity.
@@ -22,13 +25,13 @@ pub struct TargetedAction(pub Entity, pub ComponentId);
 
 impl TriggerTargets for TargetedAction {
     #[inline]
-    fn components(&self) -> &[ComponentId] {
-        std::slice::from_ref(&self.1)
+    fn components(&self) -> impl Iterator<Item = ComponentId> + Clone + '_ {
+        iter::once(self.1)
     }
 
     #[inline]
-    fn entities(&self) -> &[Entity] {
-        std::slice::from_ref(&self.0)
+    fn entities(&self) -> impl Iterator<Item = Entity> + Clone + '_ {
+        iter::once(self.0)
     }
 }
 
@@ -42,8 +45,14 @@ pub trait TriggerGetEntity {
 impl<E, B: Bundle> TriggerGetEntity for Trigger<'_, E, B> {
     #[inline]
     fn get_entity(&self) -> Option<Entity> {
-        Some(self.entity()).filter(|e| e != &Entity::PLACEHOLDER)
+        Some(self.target()).filter(|e| e != &Entity::PLACEHOLDER)
     }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AncestorQueryError {
+    Bevy(QueryEntityError),
+    NoSuchEntityError(Entity),
 }
 
 /// A [`Query`] wrapper that finds the closest ancestor entity with a given component.
@@ -51,7 +60,7 @@ impl<E, B: Bundle> TriggerGetEntity for Trigger<'_, E, B> {
 #[derive(SystemParam)]
 pub struct AncestorQuery<'w, 's, T: ReferenceType> {
     /// The query to find the component, crawling up the hierarchy if necessary.
-    check: Query<'w, 's, (<T as ReferenceType>::Has, Option<&'static Parent>)>,
+    check: Query<'w, 's, (<T as ReferenceType>::Has, Option<&'static ChildOf>)>,
     /// The query to grab the component. This query wouldn't be necessary if rust wouldn't complain!
     fetch: Query<'w, 's, T>,
     /// Caches a given entity's closest ancestor entity with the component T.
@@ -60,7 +69,7 @@ pub struct AncestorQuery<'w, 's, T: ReferenceType> {
 
 impl<'w, T: ReferenceType> AncestorQuery<'w, '_, T> {
     /// Crawls up the hierarchy to find the closest ancestor entity with the component `T`.
-    fn find(&mut self, start: Entity) -> Result<Entity, QueryEntityError<'w>> {
+    fn find(&mut self, start: Entity) -> Result<Entity, AncestorQueryError> {
         // Crawl up the hierarchy
         let mut current = start;
         loop {
@@ -72,11 +81,11 @@ impl<'w, T: ReferenceType> AncestorQuery<'w, '_, T> {
                 }
                 Ok((false, Some(parent))) => {
                     // Continue searching up the hierarchy
-                    current = **parent;
+                    current = parent.0;
                 }
                 Ok((false, None)) | Err(_) => {
                     // No parent with the component found
-                    return Err(QueryEntityError::NoSuchEntity(current));
+                    return Err(AncestorQueryError::NoSuchEntityError(current));
                 }
             }
         }
@@ -94,12 +103,12 @@ impl<T: Component> AncestorQuery<'_, '_, &'static T> {
     /// # Errors
     ///
     /// If the entity does not exist or the component is not found.
-    pub fn get(&mut self, start: Entity) -> Result<&T, QueryEntityError> {
+    pub fn get(&mut self, start: Entity) -> Result<&T, AncestorQueryError> {
         // Check the cache first
         if let Entry::Occupied(entry) = self.cache.entry(start) {
             if self.fetch.contains(*entry.get()) {
                 // Cache hit
-                return self.fetch.get(*entry.get());
+                return self.fetch.get(*entry.get()).map_err(|e| AncestorQueryError::Bevy(e));
             }
 
             // Cache miss
@@ -107,22 +116,25 @@ impl<T: Component> AncestorQuery<'_, '_, &'static T> {
         }
 
         let found = self.find(start)?;
-        self.fetch.get(found)
+        return self.fetch.get(found).map_err(|e| AncestorQueryError::Bevy(e));
     }
 }
 
-impl<T: Component> AncestorQuery<'_, '_, &'static mut T> {
+impl<T: Component<Mutability = Mutable>> AncestorQuery<'_, '_, &'static mut T> {
     /// Returns a mutable reference to the [`Component`] `T` on the closest ancestor entity, if any.
     ///
     /// # Errors
     ///
     /// If the entity does not exist or the component is not found.
-    pub fn get_mut(&mut self, start: Entity) -> Result<Mut<T>, QueryEntityError> {
+    pub fn get_mut(&mut self, start: Entity) -> Result<Mut<T>, AncestorQueryError> {
         // Check the cache first
         if let Entry::Occupied(entry) = self.cache.entry(start) {
             if self.fetch.contains(*entry.get()) {
                 // Cache hit
-                return self.fetch.get_mut(*entry.get());
+                return self
+                    .fetch
+                    .get_mut(*entry.get())
+                    .map_err(|e| AncestorQueryError::Bevy(e));
             }
 
             // Cache miss
@@ -130,7 +142,7 @@ impl<T: Component> AncestorQuery<'_, '_, &'static mut T> {
         }
 
         let found = self.find(start)?;
-        self.fetch.get_mut(found)
+        self.fetch.get_mut(found).map_err(|e| AncestorQueryError::Bevy(e))
     }
 }
 
@@ -144,7 +156,7 @@ impl<T: Component> ReferenceType for &'static T {
     type Has = Has<T>;
 }
 
-impl<T: Component> ReferenceType for &'static mut T {
+impl<T: Component<Mutability = Mutable>> ReferenceType for &'static mut T {
     type Has = Has<T>;
 }
 

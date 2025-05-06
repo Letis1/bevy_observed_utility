@@ -1,5 +1,5 @@
 use bevy::{
-    ecs::component::{ComponentHooks, StorageType},
+    ecs::component::{ComponentHooks, Mutable, StorageType},
     prelude::*,
 };
 
@@ -58,7 +58,7 @@ impl Winning {
 
     /// [`Observer`] for [`Winning`] [`Score`] entities that scores based on all child [`Score`] entities.
     fn observer(trigger: Trigger<OnScore>, actor: Query<(&Children, &Winning)>, mut scores: Query<&mut Score>) {
-        let Ok((children, settings)) = actor.get(trigger.entity()) else {
+        let Ok((children, settings)) = actor.get(trigger.target()) else {
             // The entity is not scoring for winning.
             return;
         };
@@ -74,7 +74,7 @@ impl Winning {
             max = 0.;
         }
 
-        let Ok(mut actor_score) = scores.get_mut(trigger.entity()) else {
+        let Ok(mut actor_score) = scores.get_mut(trigger.target()) else {
             // The entity is not scoring.
             return;
         };
@@ -84,10 +84,11 @@ impl Winning {
 }
 
 impl Component for Winning {
+    type Mutability = Mutable;
     const STORAGE_TYPE: StorageType = StorageType::Table;
 
     fn register_component_hooks(hooks: &mut ComponentHooks) {
-        hooks.on_add(|mut world, _entity, _component| {
+        hooks.on_add(|mut world, _ctx| {
             #[derive(Resource, Default)]
             struct WinningObserverSpawned;
 
